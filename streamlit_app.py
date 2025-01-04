@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 # Load the data with error handling
 @st.cache_data
@@ -14,17 +12,14 @@ def load_data(file):
             chunk_list.append(chunk)
         data = pd.concat(chunk_list, axis=0)
         
-        # Convert datetime columns if available
-        if 'tpep_pickup_datetime' in data.columns:
-            data['tpep_pickup_datetime'] = pd.to_datetime(data['tpep_pickup_datetime'], errors='coerce')
-        if 'tpep_dropoff_datetime' in data.columns:
-            data['tpep_dropoff_datetime'] = pd.to_datetime(data['tpep_dropoff_datetime'], errors='coerce')
+        # Convert datetime columns
+        data['tpep_pickup_datetime'] = pd.to_datetime(data['tpep_pickup_datetime'], errors='coerce')
+        data['tpep_dropoff_datetime'] = pd.to_datetime(data['tpep_dropoff_datetime'], errors='coerce')
 
         # Calculate trip duration if applicable
-        if 'tpep_pickup_datetime' in data.columns and 'tpep_dropoff_datetime' in data.columns:
-            data['trip_duration_minutes'] = (
-                (data['tpep_dropoff_datetime'] - data['tpep_pickup_datetime']).dt.total_seconds() / 60
-            )
+        data['trip_duration_minutes'] = (
+            (data['tpep_dropoff_datetime'] - data['tpep_pickup_datetime']).dt.total_seconds() / 60
+        )
         return data
     except Exception as e:
         st.error(f"Error loading data: {e}")
@@ -93,8 +88,8 @@ if file is not None:
 
             # Top 3 Boroughs
             def top_boroughs():
-                if 'pickup_borough' in data.columns:
-                    borough_counts = data['pickup_borough'].value_counts().head(3)
+                if 'PULocationID' in data.columns:
+                    borough_counts = data['PULocationID'].value_counts().head(3)
                     fig = px.bar(borough_counts, x=borough_counts.index, y=borough_counts.values, title="Top 3 Boroughs")
                     st.plotly_chart(fig)
                 else:
@@ -102,23 +97,23 @@ if file is not None:
 
             # Top 5 Routes in Manhattan
             def top_routes():
-                if 'pickup_borough' in data.columns and 'dropoff_borough' in data.columns:
-                    manhattan_data = data[data['pickup_borough'] == 'Manhattan']
-                    route_counts = manhattan_data.groupby(['pickup_location', 'dropoff_location']).size().reset_index(name='count')
+                if 'PULocationID' in data.columns and 'DOLocationID' in data.columns:
+                    manhattan_data = data[data['PULocationID'] == 'Manhattan']  # Adjust with correct Manhattan code
+                    route_counts = manhattan_data.groupby(['PULocationID', 'DOLocationID']).size().reset_index(name='count')
                     top_routes = route_counts.nlargest(5, 'count')
-                    fig = px.bar(top_routes, x='pickup_location', y='count', color='dropoff_location', title="Top 5 Routes in Manhattan")
+                    fig = px.bar(top_routes, x='PULocationID', y='count', color='DOLocationID', title="Top 5 Routes in Manhattan")
                     st.plotly_chart(fig)
                 else:
-                    st.error("Borough and location columns not found in the dataset.")
+                    st.error("Location columns not found in the dataset.")
 
             # Inter Borough Transition Heatmap
             def inter_borough_transition():
-                if 'pickup_borough' in data.columns and 'dropoff_borough' in data.columns:
-                    transition_data = pd.crosstab(data['pickup_borough'], data['dropoff_borough'])
-                    fig = px.imshow(transition_data, title="Inter Borough Transition (Heatmap)", labels={'x': 'Dropoff Borough', 'y': 'Pickup Borough'})
+                if 'PULocationID' in data.columns and 'DOLocationID' in data.columns:
+                    transition_data = pd.crosstab(data['PULocationID'], data['DOLocationID'])
+                    fig = px.imshow(transition_data, title="Inter Borough Transition (Heatmap)", labels={'x': 'Dropoff Location', 'y': 'Pickup Location'})
                     st.plotly_chart(fig)
                 else:
-                    st.error("Borough columns not found in the dataset.")
+                    st.error("Location columns not found in the dataset.")
 
             # Traffic Heatmap (Avg Rides Per Weekday Hour)
             def traffic_heatmap():
@@ -133,10 +128,10 @@ if file is not None:
 
             # Revenue Share by Pickup Zones (Percentage Bar Chart)
             def revenue_share_by_pickup_zones():
-                if 'pickup_location' in data.columns and 'total_amount' in data.columns:
-                    revenue_by_zone = data.groupby('pickup_location')['total_amount'].sum().reset_index()
+                if 'PULocationID' in data.columns and 'total_amount' in data.columns:
+                    revenue_by_zone = data.groupby('PULocationID')['total_amount'].sum().reset_index()
                     revenue_by_zone['percentage'] = 100 * revenue_by_zone['total_amount'] / revenue_by_zone['total_amount'].sum()
-                    fig = px.bar(revenue_by_zone, x='pickup_location', y='percentage', title="Revenue Share by Pickup Zones", labels={'percentage': 'Percentage'})
+                    fig = px.bar(revenue_by_zone, x='PULocationID', y='percentage', title="Revenue Share by Pickup Zones", labels={'percentage': 'Percentage'})
                     st.plotly_chart(fig)
                 else:
                     st.error("Pickup location or total amount columns not found in the dataset.")
