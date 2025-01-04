@@ -3,147 +3,104 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Load the data
+# Load the data with error handling
 @st.cache_data
-def load_data():
+def load_data(file):
     try:
-        # Try reading the CSV file in chunks to avoid buffer overflow
-        chunksize = 100000  # Adjust the chunk size
-        chunk_list = []  # To store each chunk
-        
-        for chunk in pd.read_csv("nyc_taxi_data.csv", encoding='utf-8', chunksize=chunksize, on_bad_lines='skip'):
+        # Use chunking for large files
+        chunk_list = []
+        chunksize = 50000
+        for chunk in pd.read_csv(file, encoding='utf-8', chunksize=chunksize, on_bad_lines='skip'):
             chunk_list.append(chunk)
-        
-        # Concatenate all chunks into a single DataFrame
         data = pd.concat(chunk_list, axis=0)
         
-        if data.empty:
-            st.error("Data is empty. Please check the file.")
-            return None
+        # Convert datetime columns if available
+        if 'tpep_pickup_datetime' in data.columns:
+            data['tpep_pickup_datetime'] = pd.to_datetime(data['tpep_pickup_datetime'], errors='coerce')
+        if 'tpep_dropoff_datetime' in data.columns:
+            data['tpep_dropoff_datetime'] = pd.to_datetime(data['tpep_dropoff_datetime'], errors='coerce')
         
-        # Convert datetime columns
-        data['tpep_pickup_datetime'] = pd.to_datetime(data['tpep_pickup_datetime'], errors='coerce')
-        data['tpep_dropoff_datetime'] = pd.to_datetime(data['tpep_dropoff_datetime'], errors='coerce')
-        
-        # Calculate trip duration in minutes
-        data['trip_duration_minutes'] = (data['tpep_dropoff_datetime'] - data['tpep_pickup_datetime']).dt.total_seconds() / 60
-        
+        # Calculate trip duration if applicable
+        if 'tpep_pickup_datetime' in data.columns and 'tpep_dropoff_datetime' in data.columns:
+            data['trip_duration_minutes'] = (
+                (data['tpep_dropoff_datetime'] - data['tpep_pickup_datetime']).dt.total_seconds() / 60
+            )
         return data
-    
     except Exception as e:
         st.error(f"Error loading data: {e}")
         return None
 
+# Streamlit App
+st.title("NYC Taxi Data Analysis")
+st.write("Upload the NYC Taxi dataset to analyze passenger count, payment type, fares, and more.")
 
-# Sidebar options
-st.sidebar.title("NYC Taxi Data Analysis")
-analysis_option = st.sidebar.selectbox("Choose an Analysis", [
-    "Passenger Count Distribution",
-    "Payment Type Distribution",
-    "Fare Amount Distribution",
-    "Tip Amount Distribution",
-    "Total Amount Distribution",
-    "Busiest Hours",
-    "Top Boroughs",
-    "Top Routes in Manhattan",
-    "Inter-Borough Heatmap",
-    "Traffic Heatmap (Avg Rides per Weekday Hour)",
-    "Revenue Share by Pickup Zones",
-    "Hourly Total Amount and Tips"
-])
+# File uploader
+file = st.file_uploader("Upload CSV File", type=["csv"])
 
-# Analysis Functions
-def plot_distribution(column, title):
-    if data is None:
-        st.error("No data available for analysis.")
-        return
-    
-    if column not in data.columns:
-        st.error(f"Column '{column}' not found in data.")
-        return
-    
-    # Ensure the column is numeric
-    data[column] = pd.to_numeric(data[column], errors='coerce')  # Coerce invalid values to NaN
-    data[column] = data[column].fillna(0)  # Handle NaN values by filling with 0
-    
-    # Plot the histogram
-    fig, ax = plt.subplots()
-    sns.histplot(data[column], kde=False, ax=ax)
-    ax.set_title(title)
-    st.pyplot(fig)
+if file is not None:
+    data = load_data(file)
 
+    if data is None or data.empty:
+        st.error("No data available for analysis. Please check the dataset.")
+    else:
+        st.success("Data loaded successfully!")
 
-def busiest_hours(data):
-    st.title("Top 5 Busiest Hours")
-    data['hour'] = data['tpep_pickup_datetime'].dt.hour
-    busiest = data['hour'].value_counts().head(5)
-    st.bar_chart(busiest)
+        # Sidebar for analysis options
+        st.sidebar.title("Choose an Analysis")
+        analysis_option = st.sidebar.selectbox("Analysis Type", [
+            "Passenger Count Distribution",
+            "Payment Type Distribution",
+            "Fare Amount Distribution",
+            "Tip Amount Distribution",
+            "Total Amount Distribution",
+            "Busiest Hours",
+        ])
 
+        # Function to plot distribution
+        def plot_distribution(column, title):
+            if column not in data.columns:
+                st.error(f"Column '{column}' not found in the data.")
+                return
+            # Ensure the column is numeric
+            data[column] = pd.to_numeric(data[column], errors='coerce').fillna(0)
+            # Plot the distribution
+            fig, ax = plt.subplots()
+            sns.histplot(data[column], kde=True, ax=ax)
+            ax.set_title(title)
+            ax.set_xlabel(column)
+            ax.set_ylabel("Frequency")
+            st.pyplot(fig)
 
-def top_boroughs(data):
-    st.title("Top 3 Boroughs")
-    # Add mapping of Location IDs to Borough names here
-    st.write("This requires mapping `PULocationID` and `DOLocationID` to Borough names.")
+        # Function for busiest hours
+        def busiest_hours():
+            if 'tpep_pickup_datetime' in data.columns:
+                data['hour'] = data['tpep_pickup_datetime'].dt.hour
+                busiest = data['hour'].value_counts().sort_index()
+                fig, ax = plt.subplots()
+                busiest.plot(kind='bar', ax=ax)
+                ax.set_title("Busiest Hours (Pickup Times)")
+                ax.set_xlabel("Hour of the Day")
+                ax.set_ylabel("Number of Pickups")
+                st.pyplot(fig)
+            else:
+                st.error("Datetime column not found in the dataset.")
 
+        # Execute analysis based on user selection
+        if analysis_option == "Passenger Count Distribution":
+            plot_distribution("passenger_count", "Passenger Count Distribution")
+        elif analysis_option == "Payment Type Distribution":
+            plot_distribution("payment_type", "Payment Type Distribution")
+        elif analysis_option == "Fare Amount Distribution":
+            plot_distribution("fare_amount", "Fare Amount Distribution")
+        elif analysis_option == "Tip Amount Distribution":
+            plot_distribution("tip_amount", "Tip Amount Distribution")
+        elif analysis_option == "Total Amount Distribution":
+            plot_distribution("total_amount", "Total Amount Distribution")
+        elif analysis_option == "Busiest Hours":
+            busiest_hours()
 
-def top_routes(data):
-    st.title("Top 5 Routes in Manhattan")
-    # Filter data for Manhattan and calculate routes
-    st.write("This requires filtering and route calculation.")
+else:
+    st.info("Please upload a CSV file to proceed.")
 
-
-def inter_borough_heatmap(data):
-    st.title("Inter-Borough Transition Heatmap")
-    # Add heatmap logic for transitions
-    st.write("Requires mapping `PULocationID` and `DOLocationID` to Borough names.")
-
-
-def traffic_heatmap(data):
-    st.title("Traffic Heatmap - Avg Rides Per Weekday Hour")
-    data['weekday_hour'] = data['tpep_pickup_datetime'].dt.strftime('%A-%H')
-    avg_rides = data.groupby('weekday_hour').size().mean(level='weekday_hour')
-    st.line_chart(avg_rides)
-
-
-def revenue_share(data):
-    st.title("Revenue Share by Pickup Zones")
-    revenue = data.groupby('PULocationID')['total_amount'].sum()
-    revenue_share = (revenue / revenue.sum()) * 100
-    st.bar_chart(revenue_share)
-
-
-def hourly_analysis(data):
-    st.title("Hourly Total Amount and Tips")
-    data['hour'] = data['tpep_pickup_datetime'].dt.hour
-    hourly_totals = data.groupby('hour')[['total_amount', 'tip_amount']].sum()
-    st.line_chart(hourly_totals)
-
-
-# Load the data
-data = load_data()
-
-# Analysis Execution
-if analysis_option == "Passenger Count Distribution":
-    plot_distribution("passenger_count", "Passenger Count Distribution")
-elif analysis_option == "Payment Type Distribution":
-    plot_distribution("payment_type", "Payment Type Distribution")
-elif analysis_option == "Fare Amount Distribution":
-    plot_distribution("fare_amount", "Fare Amount Distribution")
-elif analysis_option == "Tip Amount Distribution":
-    plot_distribution("tip_amount", "Tip Amount Distribution")
-elif analysis_option == "Total Amount Distribution":
-    plot_distribution("total_amount", "Total Amount Distribution")
-elif analysis_option == "Busiest Hours":
-    busiest_hours(data)
-elif analysis_option == "Top Boroughs":
-    top_boroughs(data)
-elif analysis_option == "Top Routes in Manhattan":
-    top_routes(data)
-elif analysis_option == "Inter-Borough Heatmap":
-    inter_borough_heatmap(data)
-elif analysis_option == "Traffic Heatmap (Avg Rides per Weekday Hour)":
-    traffic_heatmap(data)
-elif analysis_option == "Revenue Share by Pickup Zones":
-    revenue_share(data)
-elif analysis_option == "Hourly Total Amount and Tips":
-    hourly_analysis(data)
+# Footer
+st.write("Developed with ❤️ using Streamlit.")
