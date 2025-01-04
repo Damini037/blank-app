@@ -7,11 +7,17 @@ import seaborn as sns
 @st.cache_data
 def load_data(file):
     try:
-        # Use chunking for large files
+        # Use the 'python' engine for better handling of large row lengths
         chunk_list = []
         chunksize = 50000
-        # Attempt reading with a more tolerant encoding
-        for chunk in pd.read_csv(file, encoding='latin1', chunksize=chunksize, on_bad_lines='skip'):
+        for chunk in pd.read_csv(
+            file, 
+            encoding='latin1', 
+            engine='python',  # Switch to 'python' engine
+            chunksize=chunksize, 
+            on_bad_lines='skip',  # Skip problematic lines
+            sep=',',  # Ensure correct delimiter is specified
+        ):
             chunk_list.append(chunk)
         data = pd.concat(chunk_list, axis=0)
         
