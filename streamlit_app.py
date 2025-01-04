@@ -55,6 +55,13 @@ if file is not None:
         else:
             st.success("Data loaded successfully!")
 
+            # Display the columns and the first few rows to check the data
+            st.write("Columns in the dataset:", data.columns)
+            st.write(data.head())  # Display the first few rows of data
+
+            # Check for missing data
+            st.write("Missing values in dataset:", data.isnull().sum())
+
             # Sidebar for analysis options
             st.sidebar.title("Choose an Analysis")
             analysis_option = st.sidebar.selectbox("Analysis Type", [
