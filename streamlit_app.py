@@ -2,14 +2,13 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-import csv
 
 # Load the data
 @st.cache_data
 def load_data():
     try:
         # Try reading the CSV file with specific encoding and handle bad lines
-        data = pd.read_csv("nyc_taxi_data.csv", encoding='utf-8', on_bad_lines='skip')
+        data = pd.read_csv("nyc_taxi_data.csv", encoding='utf-8', low_memory=False, on_bad_lines='skip')
         
         # Convert datetime columns
         data['tpep_pickup_datetime'] = pd.to_datetime(data['tpep_pickup_datetime'])
