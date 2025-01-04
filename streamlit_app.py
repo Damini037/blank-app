@@ -6,7 +6,8 @@ import seaborn as sns
 # Load the data
 @st.cache
 def load_data():
-    data = pd.read_csv("nyc_taxi_data.csv")
+    data = pd.read_csv("nyc_taxi_data.csv", encoding='ISO-8859-1')
+
     data['tpep_pickup_datetime'] = pd.to_datetime(data['tpep_pickup_datetime'])
     data['tpep_dropoff_datetime'] = pd.to_datetime(data['tpep_dropoff_datetime'])
     data['trip_duration_minutes'] = (data['tpep_dropoff_datetime'] - data['tpep_pickup_datetime']).dt.total_seconds() / 60
