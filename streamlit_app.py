@@ -7,24 +7,33 @@ import seaborn as sns
 @st.cache_data
 def load_data():
     try:
-        # Try reading the CSV file with specific encoding and handle bad lines
-        data = pd.read_csv("nyc_taxi_data.csv", encoding='utf-8', low_memory=False, on_bad_lines='skip')
+        # Try reading the CSV file in chunks to avoid buffer overflow
+        chunksize = 100000  # Adjust the chunk size
+        chunk_list = []  # To store each chunk
+        
+        for chunk in pd.read_csv("nyc_taxi_data.csv", encoding='utf-8', chunksize=chunksize, on_bad_lines='skip'):
+            chunk_list.append(chunk)
+        
+        # Concatenate all chunks into a single DataFrame
+        data = pd.concat(chunk_list, axis=0)
+        
+        if data.empty:
+            st.error("Data is empty. Please check the file.")
+            return None
         
         # Convert datetime columns
-        data['tpep_pickup_datetime'] = pd.to_datetime(data['tpep_pickup_datetime'])
-        data['tpep_dropoff_datetime'] = pd.to_datetime(data['tpep_dropoff_datetime'])
-
+        data['tpep_pickup_datetime'] = pd.to_datetime(data['tpep_pickup_datetime'], errors='coerce')
+        data['tpep_dropoff_datetime'] = pd.to_datetime(data['tpep_dropoff_datetime'], errors='coerce')
+        
         # Calculate trip duration in minutes
         data['trip_duration_minutes'] = (data['tpep_dropoff_datetime'] - data['tpep_pickup_datetime']).dt.total_seconds() / 60
         
         return data
+    
     except Exception as e:
         st.error(f"Error loading data: {e}")
         return None
 
-
-# Load the data
-data = load_data()
 
 # Sidebar options
 st.sidebar.title("NYC Taxi Data Analysis")
@@ -45,20 +54,24 @@ analysis_option = st.sidebar.selectbox("Choose an Analysis", [
 
 # Analysis Functions
 def plot_distribution(column, title):
+    if data is None:
+        st.error("No data available for analysis.")
+        return
+    
     if column not in data.columns:
         st.error(f"Column '{column}' not found in data.")
         return
-
+    
     # Ensure the column is numeric
     data[column] = pd.to_numeric(data[column], errors='coerce')  # Coerce invalid values to NaN
     data[column] = data[column].fillna(0)  # Handle NaN values by filling with 0
-
+    
     # Plot the histogram
     fig, ax = plt.subplots()
     sns.histplot(data[column], kde=False, ax=ax)
     ax.set_title(title)
-    st.pyplot(fig)    
-    
+    st.pyplot(fig)
+
 
 def busiest_hours(data):
     st.title("Top 5 Busiest Hours")
@@ -66,20 +79,24 @@ def busiest_hours(data):
     busiest = data['hour'].value_counts().head(5)
     st.bar_chart(busiest)
 
+
 def top_boroughs(data):
     st.title("Top 3 Boroughs")
     # Add mapping of Location IDs to Borough names here
     st.write("This requires mapping `PULocationID` and `DOLocationID` to Borough names.")
+
 
 def top_routes(data):
     st.title("Top 5 Routes in Manhattan")
     # Filter data for Manhattan and calculate routes
     st.write("This requires filtering and route calculation.")
 
+
 def inter_borough_heatmap(data):
     st.title("Inter-Borough Transition Heatmap")
     # Add heatmap logic for transitions
     st.write("Requires mapping `PULocationID` and `DOLocationID` to Borough names.")
+
 
 def traffic_heatmap(data):
     st.title("Traffic Heatmap - Avg Rides Per Weekday Hour")
@@ -87,17 +104,23 @@ def traffic_heatmap(data):
     avg_rides = data.groupby('weekday_hour').size().mean(level='weekday_hour')
     st.line_chart(avg_rides)
 
+
 def revenue_share(data):
     st.title("Revenue Share by Pickup Zones")
     revenue = data.groupby('PULocationID')['total_amount'].sum()
     revenue_share = (revenue / revenue.sum()) * 100
     st.bar_chart(revenue_share)
 
+
 def hourly_analysis(data):
     st.title("Hourly Total Amount and Tips")
     data['hour'] = data['tpep_pickup_datetime'].dt.hour
     hourly_totals = data.groupby('hour')[['total_amount', 'tip_amount']].sum()
     st.line_chart(hourly_totals)
+
+
+# Load the data
+data = load_data()
 
 # Analysis Execution
 if analysis_option == "Passenger Count Distribution":
