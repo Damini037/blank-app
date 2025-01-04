@@ -1,37 +1,25 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+import plotly.express as px
 
 # Load the data with error handling
 @st.cache_data
 def load_data(file):
     try:
-        # Use the 'python' engine for better handling of large row lengths
         chunk_list = []
         chunksize = 50000
-        for chunk in pd.read_csv(
-            file, 
-            encoding='latin1', 
-            engine='python',  # Switch to 'python' engine
-            chunksize=chunksize, 
-            on_bad_lines='skip',  # Skip problematic lines
-            sep=',',  # Ensure correct delimiter is specified
-        ):
+        for chunk in pd.read_csv(file, encoding='latin1', engine='python', chunksize=chunksize, on_bad_lines='skip', sep=','):
             chunk_list.append(chunk)
         data = pd.concat(chunk_list, axis=0)
         
-        # Convert datetime columns if available
-        if 'tpep_pickup_datetime' in data.columns:
-            data['tpep_pickup_datetime'] = pd.to_datetime(data['tpep_pickup_datetime'], errors='coerce')
-        if 'tpep_dropoff_datetime' in data.columns:
-            data['tpep_dropoff_datetime'] = pd.to_datetime(data['tpep_dropoff_datetime'], errors='coerce')
-        
+        # Convert datetime columns
+        data['tpep_pickup_datetime'] = pd.to_datetime(data['tpep_pickup_datetime'], errors='coerce')
+        data['tpep_dropoff_datetime'] = pd.to_datetime(data['tpep_dropoff_datetime'], errors='coerce')
+
         # Calculate trip duration if applicable
-        if 'tpep_pickup_datetime' in data.columns and 'tpep_dropoff_datetime' in data.columns:
-            data['trip_duration_minutes'] = (
-                (data['tpep_dropoff_datetime'] - data['tpep_pickup_datetime']).dt.total_seconds() / 60
-            )
+        data['trip_duration_minutes'] = (
+            (data['tpep_dropoff_datetime'] - data['tpep_pickup_datetime']).dt.total_seconds() / 60
+        )
         return data
     except Exception as e:
         st.error(f"Error loading data: {e}")
@@ -70,7 +58,13 @@ if file is not None:
                 "Fare Amount Distribution",
                 "Tip Amount Distribution",
                 "Total Amount Distribution",
-                "Busiest Hours",
+                "Top 5 Busiest Hours",
+                "Top 3 Boroughs",
+                "Top 5 Routes in Manhattan",
+                "Inter Borough Transition (Heatmap)",
+                "Traffic Heatmap (Avg Rides Per Weekday Hour)",
+                "Revenue Share by Pickup Zones (Percentage Bar Chart)",
+                "Hourly Total Amount and Tips"
             ])
 
             # Function to plot distribution
@@ -78,31 +72,81 @@ if file is not None:
                 if column not in data.columns:
                     st.error(f"Column '{column}' not found in the data.")
                     return
-                # Ensure the column is numeric
                 data[column] = pd.to_numeric(data[column], errors='coerce').fillna(0)
-                # Plot the distribution
-                fig, ax = plt.subplots()
-                sns.histplot(data[column], kde=True, ax=ax)
-                ax.set_title(title)
-                ax.set_xlabel(column)
-                ax.set_ylabel("Frequency")
-                st.pyplot(fig)
+                fig = px.histogram(data, x=column, title=title)
+                st.plotly_chart(fig)
 
-            # Function for busiest hours
+            # Top 5 Busiest Hours
             def busiest_hours():
                 if 'tpep_pickup_datetime' in data.columns:
                     data['hour'] = data['tpep_pickup_datetime'].dt.hour
-                    busiest = data['hour'].value_counts().sort_index()
-                    fig, ax = plt.subplots()
-                    busiest.plot(kind='bar', ax=ax)
-                    ax.set_title("Busiest Hours (Pickup Times)")
-                    ax.set_xlabel("Hour of the Day")
-                    ax.set_ylabel("Number of Pickups")
-                    st.pyplot(fig)
+                    busiest = data['hour'].value_counts().sort_index().head(5)
+                    fig = px.bar(busiest, x=busiest.index, y=busiest.values, title="Top 5 Busiest Hours")
+                    st.plotly_chart(fig)
                 else:
                     st.error("Datetime column not found in the dataset.")
 
-            # Execute analysis based on user selection
+            # Top 3 Boroughs
+            def top_boroughs():
+                if 'PULocationID' in data.columns:
+                    borough_counts = data['PULocationID'].value_counts().head(3)
+                    fig = px.bar(borough_counts, x=borough_counts.index, y=borough_counts.values, title="Top 3 Boroughs")
+                    st.plotly_chart(fig)
+                else:
+                    st.error("Pickup borough column not found in the dataset.")
+
+            # Top 5 Routes in Manhattan
+            def top_routes():
+                if 'PULocationID' in data.columns and 'DOLocationID' in data.columns:
+                    manhattan_data = data[data['PULocationID'] == 'Manhattan']  # Adjust with correct Manhattan code
+                    route_counts = manhattan_data.groupby(['PULocationID', 'DOLocationID']).size().reset_index(name='count')
+                    top_routes = route_counts.nlargest(5, 'count')
+                    fig = px.bar(top_routes, x='PULocationID', y='count', color='DOLocationID', title="Top 5 Routes in Manhattan")
+                    st.plotly_chart(fig)
+                else:
+                    st.error("Location columns not found in the dataset.")
+
+            # Inter Borough Transition Heatmap
+            def inter_borough_transition():
+                if 'PULocationID' in data.columns and 'DOLocationID' in data.columns:
+                    transition_data = pd.crosstab(data['PULocationID'], data['DOLocationID'])
+                    fig = px.imshow(transition_data, title="Inter Borough Transition (Heatmap)", labels={'x': 'Dropoff Location', 'y': 'Pickup Location'})
+                    st.plotly_chart(fig)
+                else:
+                    st.error("Location columns not found in the dataset.")
+
+            # Traffic Heatmap (Avg Rides Per Weekday Hour)
+            def traffic_heatmap():
+                if 'tpep_pickup_datetime' in data.columns:
+                    data['weekday'] = data['tpep_pickup_datetime'].dt.weekday
+                    data['hour'] = data['tpep_pickup_datetime'].dt.hour
+                    weekday_hour_counts = data.groupby(['weekday', 'hour']).size().reset_index(name='count')
+                    fig = px.density_heatmap(weekday_hour_counts, x='hour', y='weekday', z='count', title="Traffic Heatmap - Avg Rides Per Weekday Hour")
+                    st.plotly_chart(fig)
+                else:
+                    st.error("Datetime column not found in the dataset.")
+
+            # Revenue Share by Pickup Zones (Percentage Bar Chart)
+            def revenue_share_by_pickup_zones():
+                if 'PULocationID' in data.columns and 'total_amount' in data.columns:
+                    revenue_by_zone = data.groupby('PULocationID')['total_amount'].sum().reset_index()
+                    revenue_by_zone['percentage'] = 100 * revenue_by_zone['total_amount'] / revenue_by_zone['total_amount'].sum()
+                    fig = px.bar(revenue_by_zone, x='PULocationID', y='percentage', title="Revenue Share by Pickup Zones", labels={'percentage': 'Percentage'})
+                    st.plotly_chart(fig)
+                else:
+                    st.error("Pickup location or total amount columns not found in the dataset.")
+
+            # Hourly Total Amount and Tips
+            def hourly_total_and_tips():
+                if 'tpep_pickup_datetime' in data.columns and 'total_amount' in data.columns and 'tip_amount' in data.columns:
+                    data['hour'] = data['tpep_pickup_datetime'].dt.hour
+                    hourly_totals = data.groupby('hour')[['total_amount', 'tip_amount']].sum().reset_index()
+                    fig = px.line(hourly_totals, x='hour', y=['total_amount', 'tip_amount'], title="Hourly Total Amount and Tips")
+                    st.plotly_chart(fig)
+                else:
+                    st.error("Required columns not found in the dataset.")
+
+            # Execute the selected analysis
             if analysis_option == "Passenger Count Distribution":
                 plot_distribution("passenger_count", "Passenger Count Distribution")
             elif analysis_option == "Payment Type Distribution":
@@ -113,11 +157,20 @@ if file is not None:
                 plot_distribution("tip_amount", "Tip Amount Distribution")
             elif analysis_option == "Total Amount Distribution":
                 plot_distribution("total_amount", "Total Amount Distribution")
-            elif analysis_option == "Busiest Hours":
+            elif analysis_option == "Top 5 Busiest Hours":
                 busiest_hours()
+            elif analysis_option == "Top 3 Boroughs":
+                top_boroughs()
+            elif analysis_option == "Top 5 Routes in Manhattan":
+                top_routes()
+            elif analysis_option == "Inter Borough Transition (Heatmap)":
+                inter_borough_transition()
+            elif analysis_option == "Traffic Heatmap (Avg Rides Per Weekday Hour)":
+                traffic_heatmap()
+            elif analysis_option == "Revenue Share by Pickup Zones (Percentage Bar Chart)":
+                revenue_share_by_pickup_zones()
+            elif analysis_option == "Hourly Total Amount and Tips":
+                hourly_total_and_tips()
 
 else:
     st.info("Please upload a CSV file to proceed.")
-
-# Footer
-st.write("Developed with ❤️ using Streamlit.")
