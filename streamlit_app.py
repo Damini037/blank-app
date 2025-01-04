@@ -2,18 +2,20 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import csv
 
 # Load the data
+@st.cache_data
 def load_data():
     try:
-        # Try reading the CSV file with a specific encoding (e.g., 'utf-8' or 'ISO-8859-1')
-        data = pd.read_csv("nyc_taxi_data.csv", encoding='utf-8')  # or 'ISO-8859-1'
+        # Try reading the CSV file with specific encoding and handle bad lines
+        data = pd.read_csv("nyc_taxi_data.csv", encoding='utf-8', on_bad_lines='skip')
         
-        # Convert the date columns to datetime format
+        # Convert datetime columns
         data['tpep_pickup_datetime'] = pd.to_datetime(data['tpep_pickup_datetime'])
         data['tpep_dropoff_datetime'] = pd.to_datetime(data['tpep_dropoff_datetime'])
-        
-        # Create a new column for trip duration in minutes
+
+        # Calculate trip duration in minutes
         data['trip_duration_minutes'] = (data['tpep_dropoff_datetime'] - data['tpep_pickup_datetime']).dt.total_seconds() / 60
         
         return data
@@ -22,6 +24,7 @@ def load_data():
         return None
 
 
+# Load the data
 data = load_data()
 
 # Sidebar options
@@ -56,6 +59,7 @@ def plot_distribution(column, title):
     sns.histplot(data[column], kde=False, ax=ax)
     ax.set_title(title)
     st.pyplot(fig)    
+    
 
 def busiest_hours(data):
     st.title("Top 5 Busiest Hours")
