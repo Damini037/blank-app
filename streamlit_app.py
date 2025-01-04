@@ -46,10 +46,20 @@ analysis_option = st.sidebar.selectbox("Choose an Analysis", [
 
 # Analysis Functions
 def plot_distribution(column, title):
-    st.title(title)
+    if column not in data.columns:
+        st.error(f"Column '{column}' not found in data.")
+        return
+
+    # Ensure the column is numeric
+    data[column] = pd.to_numeric(data[column], errors='coerce')  # Coerce invalid values to NaN
+    data[column] = data[column].fillna(0)  # Handle NaN values by filling with 0
+
+    # Plot the histogram
     fig, ax = plt.subplots()
     sns.histplot(data[column], kde=False, ax=ax)
-    st.pyplot(fig)
+    ax.set_title(title)
+    st.pyplot(fig)    
+    
 
 def busiest_hours(data):
     st.title("Top 5 Busiest Hours")
