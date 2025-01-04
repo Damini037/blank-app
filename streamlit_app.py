@@ -10,7 +10,8 @@ def load_data(file):
         # Use chunking for large files
         chunk_list = []
         chunksize = 50000
-        for chunk in pd.read_csv(file, encoding='utf-8', chunksize=chunksize, on_bad_lines='skip'):
+        # Attempt reading with a more tolerant encoding
+        for chunk in pd.read_csv(file, encoding='latin1', chunksize=chunksize, on_bad_lines='skip'):
             chunk_list.append(chunk)
         data = pd.concat(chunk_list, axis=0)
         
