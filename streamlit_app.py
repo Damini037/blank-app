@@ -6,7 +6,8 @@ import seaborn as sns
 # Load the data
 @st.cache
 def load_data():
-    data = pd.read_csv("nyc_taxi_data.csv", encoding='ISO-8859-1')
+    data = pd.read_csv("nyc_taxi_data.csv", encoding='utf-8', errors='replace')
+
 
     data['tpep_pickup_datetime'] = pd.to_datetime(data['tpep_pickup_datetime'])
     data['tpep_dropoff_datetime'] = pd.to_datetime(data['tpep_dropoff_datetime'])
