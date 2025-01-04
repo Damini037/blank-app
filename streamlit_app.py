@@ -5,13 +5,17 @@ import seaborn as sns
 
 # Load the data
 @st.cache
+
+
 def load_data():
     try:
-        data = pd.read_csv("nyc_taxi_data.csv", encoding='utf-8', errors='replace')
+        # Try reading the CSV file with a specific encoding (e.g., 'utf-8' or 'ISO-8859-1')
+        data = pd.read_csv("nyc_taxi_data.csv", encoding='utf-8')  # or 'ISO-8859-1'
         return data
     except Exception as e:
         st.error(f"Error loading data: {e}")
         return None
+
 
                       
 
