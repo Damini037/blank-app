@@ -6,7 +6,14 @@ import seaborn as sns
 # Load the data
 @st.cache
 def load_data():
-    data = pd.read_csv("nyc_taxi_data.csv", encoding='utf-8', errors='replace')
+    try:
+        data = pd.read_csv("nyc_taxi_data.csv", encoding='utf-8', errors='replace')
+        return data
+    except Exception as e:
+        st.error(f"Error loading data: {e}")
+        return None
+
+                      
 
 
     data['tpep_pickup_datetime'] = pd.to_datetime(data['tpep_pickup_datetime'])
